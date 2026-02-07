@@ -31,10 +31,9 @@ const BucketView = ({ onDeleteBucket, deletingBucket, creatingBucket, deletingBu
   const buckets = bucketsData?.data || [];
   const emails = emailsData?.data?.emails || [];
 
-  // Show loading overlay only when viewing the specific bucket being created or deleted
-  const showLoadingOverlay =
-    (creatingBucket && activeBucketId === creatingBucketId) ||
-    (deletingBucket && activeBucketId === deletingBucketId);
+  // Show loading overlay only when viewing the bucket being created
+  // For deletion, the message under tabs is sufficient
+  const showLoadingOverlay = (creatingBucket && activeBucketId === creatingBucketId);
 
   return (
     <div>
