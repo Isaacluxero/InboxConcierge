@@ -90,10 +90,48 @@ const BucketView = ({ onDeleteBucket, deletingBucket, creatingBucket, deletingBu
           </div>
         </div>
       ) : emailsLoading ? (
-        <div className="loading">Loading emails...</div>
+        <div style={{
+          minHeight: '400px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexDirection: 'column',
+          gap: '1rem'
+        }}>
+          <div className="spinner-lg" style={{ borderTopColor: '#3B82F6' }} />
+          <div style={{
+            fontWeight: '600',
+            fontSize: '1.125rem',
+            color: 'rgba(255, 255, 255, 0.9)'
+          }}>
+            Loading emails...
+          </div>
+          <div style={{ fontSize: '0.875rem', color: 'rgba(255, 255, 255, 0.6)' }}>
+            If this is your first sync, it may take a minute
+          </div>
+        </div>
       ) : emails.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '3rem', color: '#6b7280' }}>
-          <p>No emails found</p>
+        <div style={{
+          minHeight: '400px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexDirection: 'column',
+          gap: '1rem',
+          textAlign: 'center',
+          padding: '3rem'
+        }}>
+          <div style={{ fontSize: '3rem' }}>📭</div>
+          <div style={{
+            fontWeight: '600',
+            fontSize: '1.125rem',
+            color: 'rgba(255, 255, 255, 0.9)'
+          }}>
+            No emails found
+          </div>
+          <div style={{ fontSize: '0.875rem', color: 'rgba(255, 255, 255, 0.6)' }}>
+            {activeBucketId ? 'Try selecting a different bucket' : 'Click "Sync Emails" to fetch your Gmail messages'}
+          </div>
         </div>
       ) : (
         <div style={{ display: 'grid', gap: '1rem' }}>
