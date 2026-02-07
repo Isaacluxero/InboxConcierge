@@ -182,6 +182,7 @@ const DashboardPage = ({ user, onLogout }) => {
                 creatingBucket={createBucketMutation.isPending}
                 deletingBucketId={deletingBucketId}
                 creatingBucketId={creatingBucketId}
+                syncingEmails={syncMutation.isPending}
               />
             )}
           </>

@@ -4,7 +4,7 @@ import { bucketService, emailService } from '../../services/auth';
 import BucketTabs from './BucketTabs';
 import EmailCard from './EmailCard';
 
-const BucketView = ({ onDeleteBucket, deletingBucket, creatingBucket, deletingBucketId, creatingBucketId }) => {
+const BucketView = ({ onDeleteBucket, deletingBucket, creatingBucket, deletingBucketId, creatingBucketId, syncingEmails }) => {
   const [activeBucketId, setActiveBucketId] = useState(null);
 
   const { data: bucketsData, isLoading: bucketsLoading } = useQuery({
@@ -88,7 +88,33 @@ const BucketView = ({ onDeleteBucket, deletingBucket, creatingBucket, deletingBu
             </div>
           </div>
         </div>
+      ) : syncingEmails ? (
+        // Syncing emails from Gmail - show this while sync mutation is pending
+        <div style={{
+          minHeight: '400px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexDirection: 'column',
+          gap: '1rem'
+        }}>
+          <div className="spinner-lg" style={{ borderTopColor: '#3B82F6' }} />
+          <div style={{
+            fontWeight: '600',
+            fontSize: '1.125rem',
+            color: 'rgba(255, 255, 255, 0.9)'
+          }}>
+            Syncing emails from Gmail...
+          </div>
+          <div style={{ fontSize: '0.875rem', color: 'rgba(255, 255, 255, 0.6)' }}>
+            Fetching, classifying, and preparing your emails for search
+          </div>
+          <div style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.5)', marginTop: '0.5rem' }}>
+            This may take up to a minute for 200 emails
+          </div>
+        </div>
       ) : emailsLoading ? (
+        // Loading emails from database - show this while fetching from DB
         <div style={{
           minHeight: '400px',
           display: 'flex',
@@ -104,9 +130,6 @@ const BucketView = ({ onDeleteBucket, deletingBucket, creatingBucket, deletingBu
             color: 'rgba(255, 255, 255, 0.9)'
           }}>
             Loading emails...
-          </div>
-          <div style={{ fontSize: '0.875rem', color: 'rgba(255, 255, 255, 0.6)' }}>
-            If this is your first sync, it may take a minute
           </div>
         </div>
       ) : emails.length === 0 ? (
