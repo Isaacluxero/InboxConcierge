@@ -8,7 +8,7 @@ export class ClassificationService {
     this.claudeService = new ClaudeService();
   }
 
-  async classifyEmails(emails, batchSize = 30) {
+  async classifyEmails(emails, batchSize = 50) {
     const buckets = await prisma.bucket.findMany({
       where: { userId: this.userId }
     });

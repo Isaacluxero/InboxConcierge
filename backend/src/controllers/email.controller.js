@@ -27,32 +27,42 @@ export const syncEmails = asyncHandler(async (req, res) => {
 
     logger.info(`Saved ${savedEmails.length} emails for user ${user.email}`);
 
-    // Classify unclassified emails
-    const unclassifiedEmails = await prisma.email.findMany({
-      where: {
-        userId: user.id,
-        bucketId: null
-      },
-      take: 100
-    });
+    // Run classification and embeddings in parallel for faster processing
+    const [classificationResult, embeddingsResult] = await Promise.all([
+      // Classify unclassified emails
+      (async () => {
+        const unclassifiedEmails = await prisma.email.findMany({
+          where: {
+            userId: user.id,
+            bucketId: null
+          },
+          take: 100
+        });
 
-    if (unclassifiedEmails.length > 0) {
-      const classificationService = new ClassificationService(user.id);
-      await classificationService.classifyEmails(unclassifiedEmails);
-      logger.info(`Classified ${unclassifiedEmails.length} emails`);
-    }
+        if (unclassifiedEmails.length > 0) {
+          const classificationService = new ClassificationService(user.id);
+          await classificationService.classifyEmails(unclassifiedEmails);
+          logger.info(`Classified ${unclassifiedEmails.length} emails`);
+          return unclassifiedEmails.length;
+        }
+        return 0;
+      })(),
 
-    // Auto-generate embeddings for emails without them
-    const searchService = new SearchService(user.id);
-    const embeddingsResult = await searchService.generateMissingEmbeddings(50);
-    logger.info(`Generated embeddings for ${embeddingsResult.processed} emails`);
+      // Auto-generate embeddings for emails without them (runs in parallel)
+      (async () => {
+        const searchService = new SearchService(user.id);
+        const result = await searchService.generateMissingEmbeddings(50);
+        logger.info(`Generated embeddings for ${result.processed} emails`);
+        return result;
+      })()
+    ]);
 
     res.json({
       success: true,
       data: {
         fetched: emails.length,
         saved: savedEmails.length,
-        classified: unclassifiedEmails.length,
+        classified: classificationResult,
         embeddings: embeddingsResult.processed
       }
     });
