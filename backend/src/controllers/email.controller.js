@@ -1,18 +1,19 @@
-import { prisma } from '../server.js';
+import { prisma } from '../db/prisma.js';
 import { GmailService } from '../services/gmail.service.js';
 import { ClassificationService } from '../services/classification.service.js';
 import { SearchService } from '../services/search.service.js';
 import logger from '../utils/logger.js';
+import { asyncHandler, AppError } from '../utils/errorHandler.js';
+import { HTTP_STATUS } from '../config/constants.js';
 
-export const syncEmails = async (req, res) => {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id }
-    });
+export const syncEmails = asyncHandler(async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.id }
+  });
 
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
-    }
+  if (!user) {
+    throw new AppError('User not found', HTTP_STATUS.NOT_FOUND);
+  }
 
     const gmailService = new GmailService(user);
 
@@ -55,11 +56,7 @@ export const syncEmails = async (req, res) => {
         embeddings: embeddingsResult.processed
       }
     });
-  } catch (error) {
-    logger.error('Email sync error:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-};
+});
 
 export const getEmails = async (req, res) => {
   try {

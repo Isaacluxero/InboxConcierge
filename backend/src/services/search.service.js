@@ -1,6 +1,7 @@
-import { prisma } from '../server.js';
+import { prisma } from '../db/prisma.js';
 import { OpenAIService } from './openai.service.js';
 import logger from '../utils/logger.js';
+import { SEARCH_CONFIG } from '../config/constants.js';
 
 export class SearchService {
   constructor(userId) {
@@ -118,7 +119,7 @@ export class SearchService {
       logger.info(`[SmartSearch] Found ${results.emails.length} results`);
 
       return {
-        emails: results.emails.slice(0, 10), // Top 10 results
+        emails: results.emails.slice(0, 50), // Top 50 results
         totalCount: results.totalCount,
         strategy: results.strategy,
         query
@@ -135,32 +136,37 @@ export class SearchService {
    */
   async structuredSearch(filters) {
     const whereConditions = {
-      userId: this.userId,
-      AND: []
+      userId: this.userId
     };
+
+    const andConditions = [];
 
     // Add timeframe filter
     if (filters.timeframe) {
       const timeCondition = {};
       if (filters.timeframe.start) {
         timeCondition.gte = new Date(filters.timeframe.start);
+        logger.info(`[StructuredSearch] Timeframe start: ${timeCondition.gte.toISOString()}`);
       }
       if (filters.timeframe.end) {
         timeCondition.lte = new Date(filters.timeframe.end);
+        logger.info(`[StructuredSearch] Timeframe end: ${timeCondition.lte.toISOString()}`);
       }
       if (Object.keys(timeCondition).length > 0) {
-        whereConditions.AND.push({ receivedAt: timeCondition });
+        andConditions.push({ receivedAt: timeCondition });
+        logger.info('[StructuredSearch] Added timeframe condition:', timeCondition);
       }
     }
 
     // Add sender filter
     if (filters.sender) {
-      whereConditions.AND.push({
+      andConditions.push({
         OR: [
           { sender: { contains: filters.sender, mode: 'insensitive' } },
           { senderEmail: { contains: filters.sender, mode: 'insensitive' } }
         ]
       });
+      logger.info(`[StructuredSearch] Added sender filter: ${filters.sender}`);
     }
 
     // Add bucket filter
@@ -173,20 +179,29 @@ export class SearchService {
       });
 
       if (bucket) {
-        whereConditions.AND.push({ bucketId: bucket.id });
+        andConditions.push({ bucketId: bucket.id });
+        logger.info(`[StructuredSearch] Added bucket filter: ${filters.bucket} (id: ${bucket.id})`);
       }
     }
 
-    if (whereConditions.AND.length === 0) {
-      delete whereConditions.AND;
+    // Only add AND if we have conditions
+    if (andConditions.length > 0) {
+      whereConditions.AND = andConditions;
     }
+
+    logger.info('[StructuredSearch] Final WHERE conditions:', JSON.stringify(whereConditions, null, 2));
 
     const emails = await prisma.email.findMany({
       where: whereConditions,
       include: { bucket: true },
       orderBy: { receivedAt: 'desc' },
-      take: 10
+      take: 50
     });
+
+    logger.info(`[StructuredSearch] Found ${emails.length} results`);
+    if (emails.length > 0) {
+      logger.info(`[StructuredSearch] Date range of results: ${emails[emails.length - 1].receivedAt.toISOString()} to ${emails[0].receivedAt.toISOString()}`);
+    }
 
     return {
       emails,
@@ -200,13 +215,14 @@ export class SearchService {
    * Uses pgvector for semantic similarity
    */
   async vectorSearch(topic) {
-    // Check if any emails have embeddings
-    const embeddingCount = await prisma.email.count({
-      where: {
-        userId: this.userId,
-        embedding: { not: null }
-      }
-    });
+    // Check if any emails have embeddings (using raw SQL because Prisma doesn't support vector type)
+    const embeddingCountResult = await prisma.$queryRaw`
+      SELECT COUNT(*) as count
+      FROM "Email"
+      WHERE "userId" = ${this.userId}
+        AND embedding IS NOT NULL
+    `;
+    const embeddingCount = Number(embeddingCountResult[0].count);
 
     logger.info(`[VectorSearch] Found ${embeddingCount} emails with embeddings`);
 
@@ -239,15 +255,22 @@ export class SearchService {
       WHERE "userId" = ${this.userId}
         AND embedding IS NOT NULL
       ORDER BY embedding <=> ${queryEmbedding}::vector
-      LIMIT 10
+      LIMIT 50
     `;
 
     logger.info(`[VectorSearch] Found ${emails.length} results before filtering`);
 
-    // Lower similarity threshold to 0.5 for better recall
-    const filteredEmails = emails.filter(email => email.similarity > 0.5);
+    // Log similarity distribution for analytics
+    if (emails.length > 0) {
+      const similarities = emails.map(e => e.similarity);
+      logger.info(`[VectorSearch] Similarity scores - Max: ${Math.max(...similarities).toFixed(3)}, Min: ${Math.min(...similarities).toFixed(3)}, Avg: ${(similarities.reduce((sum, s) => sum + s, 0) / similarities.length).toFixed(3)}`);
+    }
 
-    logger.info(`[VectorSearch] ${filteredEmails.length} results after similarity > 0.5 filter`);
+    // Lower threshold for better recall (previously 0.5 was too strict)
+    // Many valid semantic matches fall in the 0.3-0.5 range
+    const filteredEmails = emails.filter(email => email.similarity > SEARCH_CONFIG.SIMILARITY_THRESHOLD);
+
+    logger.info(`[VectorSearch] ${filteredEmails.length} results after similarity > ${SEARCH_CONFIG.SIMILARITY_THRESHOLD} filter`);
 
     // If no results with vector search, fallback to keyword search
     if (filteredEmails.length === 0) {
@@ -259,7 +282,7 @@ export class SearchService {
     const emailsWithBuckets = await Promise.all(
       filteredEmails.map(async (email) => {
         if (email.bucketId) {
-          const bucket = await prisma.bucket.findUnique(
+          const bucket = await prisma.bucket.findUnique({
             where: { id: email.bucketId }
           });
           return { ...email, bucket };
@@ -292,7 +315,7 @@ export class SearchService {
       },
       include: { bucket: true },
       orderBy: { receivedAt: 'desc' },
-      take: 10
+      take: 50
     });
 
     logger.info(`[KeywordSearch] Found ${emails.length} results for "${keyword}"`);
@@ -309,35 +332,34 @@ export class SearchService {
    * Filter candidates with PostgreSQL, then re-rank by vector similarity
    */
   async hybridSearch(filters) {
-    // Step 1: Filter candidates with PostgreSQL
-    const whereConditions = {
-      userId: this.userId,
-      embedding: { not: null }, // Only emails with embeddings
-      AND: []
-    };
+    // Step 1: Build SQL query to filter candidates (using raw SQL for embedding check)
+    const whereConditions = [];
+    const params = [this.userId];
+
+    whereConditions.push(`"userId" = $1`);
+    whereConditions.push(`embedding IS NOT NULL`);
+
+    let paramIndex = 2;
 
     // Add timeframe filter
     if (filters.timeframe) {
-      const timeCondition = {};
       if (filters.timeframe.start) {
-        timeCondition.gte = new Date(filters.timeframe.start);
+        whereConditions.push(`"receivedAt" >= $${paramIndex}`);
+        params.push(new Date(filters.timeframe.start));
+        paramIndex++;
       }
       if (filters.timeframe.end) {
-        timeCondition.lte = new Date(filters.timeframe.end);
-      }
-      if (Object.keys(timeCondition).length > 0) {
-        whereConditions.AND.push({ receivedAt: timeCondition });
+        whereConditions.push(`"receivedAt" <= $${paramIndex}`);
+        params.push(new Date(filters.timeframe.end));
+        paramIndex++;
       }
     }
 
     // Add sender filter
     if (filters.sender) {
-      whereConditions.AND.push({
-        OR: [
-          { sender: { contains: filters.sender, mode: 'insensitive' } },
-          { senderEmail: { contains: filters.sender, mode: 'insensitive' } }
-        ]
-      });
+      whereConditions.push(`(LOWER(sender) LIKE $${paramIndex} OR LOWER("senderEmail") LIKE $${paramIndex})`);
+      params.push(`%${filters.sender.toLowerCase()}%`);
+      paramIndex++;
     }
 
     // Add bucket filter
@@ -350,20 +372,19 @@ export class SearchService {
       });
 
       if (bucket) {
-        whereConditions.AND.push({ bucketId: bucket.id });
+        whereConditions.push(`"bucketId" = $${paramIndex}`);
+        params.push(bucket.id);
+        paramIndex++;
       }
     }
 
-    if (whereConditions.AND.length === 0) {
-      delete whereConditions.AND;
-    }
+    const whereClause = whereConditions.join(' AND ');
 
-    // Get candidate email IDs
-    const candidates = await prisma.email.findMany({
-      where: whereConditions,
-      select: { id: true },
-      take: 100 // Get more candidates for re-ranking
-    });
+    // Get candidate email IDs using raw SQL
+    const candidates = await prisma.$queryRawUnsafe(
+      `SELECT id FROM "Email" WHERE ${whereClause} LIMIT 200`,
+      ...params
+    );
 
     if (candidates.length === 0) {
       return {
@@ -395,7 +416,7 @@ export class SearchService {
       FROM "Email"
       WHERE id = ANY(${candidateIds}::text[])
       ORDER BY embedding <=> ${queryEmbedding}::vector
-      LIMIT 10
+      LIMIT 50
     `;
 
     // Fetch bucket information
@@ -426,7 +447,7 @@ export class SearchService {
       where: { userId: this.userId },
       include: { bucket: true },
       orderBy: { receivedAt: 'desc' },
-      take: 10
+      take: 50
     });
 
     return {
@@ -469,13 +490,14 @@ export class SearchService {
    */
   async generateMissingEmbeddings(batchSize = 100) {
     try {
-      const emailsWithoutEmbeddings = await prisma.email.findMany({
-        where: {
-          userId: this.userId,
-          embedding: null
-        },
-        take: batchSize
-      });
+      // Use raw SQL to find emails without embeddings (Prisma doesn't support vector type)
+      const emailsWithoutEmbeddings = await prisma.$queryRaw`
+        SELECT id, "userId", "gmailId", subject, sender, "senderEmail", preview, "receivedAt", "bucketId", "bodySnippet", "createdAt", "updatedAt"
+        FROM "Email"
+        WHERE "userId" = ${this.userId}
+          AND embedding IS NULL
+        LIMIT ${batchSize}
+      `;
 
       logger.info(`[VectorSearch] Generating embeddings for ${emailsWithoutEmbeddings.length} emails`);
 
@@ -483,11 +505,18 @@ export class SearchService {
         await this.generateEmbeddingForEmail(email.id);
       }
 
+      // Get remaining count using raw SQL
+      const remainingResult = await prisma.$queryRaw`
+        SELECT COUNT(*) as count
+        FROM "Email"
+        WHERE "userId" = ${this.userId}
+          AND embedding IS NULL
+      `;
+      const remaining = Number(remainingResult[0].count);
+
       return {
         processed: emailsWithoutEmbeddings.length,
-        remaining: await prisma.email.count({
-          where: { userId: this.userId, embedding: null }
-        })
+        remaining
       };
     } catch (error) {
       logger.error('[VectorSearch] Batch embedding error:', error);

@@ -74,3 +74,10 @@ Desktop.ini
 
 # Linux
 .directory
+
+# Development documentation
+CLAUDE.md
+
+# Test and analysis markdown files (keep only README.md)
+*.md
+!README.md

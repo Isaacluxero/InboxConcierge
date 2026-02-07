@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import { prisma } from '../server.js';
+import { prisma } from '../db/prisma.js';
 import logger from '../utils/logger.js';
 
 export class GmailService {

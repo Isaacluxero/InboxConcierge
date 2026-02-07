@@ -1,4 +1,4 @@
-import { prisma } from '../server.js';
+import { prisma } from '../db/prisma.js';
 import { ClaudeService } from './claude.service.js';
 import logger from '../utils/logger.js';
 
@@ -73,7 +73,7 @@ export class ClassificationService {
 
   buildClassificationPrompt(emails, buckets) {
     const bucketDescriptions = buckets.map(b => {
-      return `- ${b.name}: ${b.description || 'User-defined category'}`;
+      return `- ${b.name}: ${b.description || 'Emails related to ' + b.name}`;
     }).join('\n');
 
     const emailDescriptions = emails.map((email, idx) => {
@@ -86,7 +86,7 @@ Preview: ${email.preview.substring(0, 200)}...
 `;
     }).join('\n');
 
-    return `You are an email classification assistant. Classify the following emails into these buckets:
+    return `You are an email classification assistant. Classify each email into the most appropriate bucket based on the sender and content.
 
 BUCKETS:
 ${bucketDescriptions}
@@ -94,7 +94,24 @@ ${bucketDescriptions}
 EMAILS:
 ${emailDescriptions}
 
-Analyze each email carefully and return a JSON array with this exact format:
+CRITICAL CLASSIFICATION RULES:
+1. SENDER DOMAIN MATCHING: If the sender email or domain contains a bucket name (case-insensitive), classify it to that bucket
+   - Example: "no-reply@instagram.com" → Instagram bucket
+   - Example: "notifications@etsy.com" → Etsy bucket
+   - Example: "service@linkedin.com" → LinkedIn bucket
+
+2. SUBJECT/CONTENT MATCHING: If sender doesn't match, check if the subject or preview contains the bucket name or clear references to it
+
+3. DEFAULT BUCKETS: Use these for general categories:
+   - Important: Urgent emails requiring action, from known contacts
+   - Newsletter: Marketing emails, promotions, bulk emails
+   - Social: Social media notifications
+   - Auto-archive: Receipts, confirmations, automated notifications
+   - Can Wait: Low priority emails
+
+4. ACCURACY: Be precise - an Instagram email should ALWAYS go to Instagram bucket if it exists, not to "Social" or "Newsletter"
+
+Return a JSON array with this exact format:
 [
   {
     "email_id": "email-id-here",
@@ -102,12 +119,6 @@ Analyze each email carefully and return a JSON array with this exact format:
     "confidence": 0.95
   }
 ]
-
-Consider:
-- Sender reputation and domain
-- Subject line urgency and keywords
-- Email content type (transactional, promotional, personal, etc.)
-- Patterns suggesting automated messages
 
 Return ONLY the JSON array, no additional text.`;
   }

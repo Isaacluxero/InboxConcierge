@@ -5,9 +5,9 @@ import passport from 'passport';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
-import { PrismaClient } from '@prisma/client';
 import logger from './utils/logger.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import { prisma, disconnectPrisma } from './db/prisma.js';
 import authRoutes from './routes/auth.routes.js';
 import emailRoutes from './routes/email.routes.js';
 import bucketRoutes from './routes/bucket.routes.js';
@@ -18,7 +18,6 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const prisma = new PrismaClient();
 
 // Security: Helmet - sets various HTTP headers for security
 app.use(helmet({
@@ -99,7 +98,7 @@ app.use(errorHandler);
 // Graceful shutdown
 const gracefulShutdown = async () => {
   logger.info('Shutting down gracefully...');
-  await prisma.$disconnect();
+  await disconnectPrisma();
   process.exit(0);
 };
 

@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import logger from '../utils/logger.js';
+import { AI_CONFIG, OPENAI_MODELS } from '../config/constants.js';
 
 export class OpenAIService {
   constructor() {
@@ -38,13 +39,13 @@ Examples:
 Return ONLY a JSON array of strings, no other text.`;
 
       const response = await this.client.chat.completions.create({
-        model: 'gpt-3.5-turbo',
+        model: OPENAI_MODELS.QUERY_EXPANSION,
         messages: [
           { role: 'system', content: 'You are a helpful search query expansion assistant. Always respond with valid JSON arrays only.' },
           { role: 'user', content: prompt }
         ],
-        temperature: 0.3, // Low temperature for consistent, focused results
-        max_tokens: 200
+        temperature: AI_CONFIG.QUERY_EXPANSION_TEMPERATURE,
+        max_tokens: AI_CONFIG.QUERY_EXPANSION_MAX_TOKENS
       });
 
       const content = response.choices[0].message.content.trim();
@@ -78,7 +79,11 @@ Return ONLY a JSON array of strings, no other text.`;
   async parseSearchQuery(query) {
     try {
       const now = new Date();
-      const prompt = `Parse this email search query into structured filters.
+      const today = now.toISOString().split('T')[0]; // YYYY-MM-DD format
+
+      const prompt = `IMPORTANT: Today's date is ${today} (${now.toISOString()})
+
+Parse this email search query into structured filters.
 
 Query: "${query}"
 
@@ -104,12 +109,10 @@ Examples:
 - "important emails about budget" → {"topic": "budget", "timeframe": null, "sender": null, "bucket": "Important", "hasAttachment": null}
 - "get emails from last week" → {"topic": null, "timeframe": {"start": "2026-01-30T00:00:00Z", "end": "2026-02-06T23:59:59Z"}, "sender": null, "bucket": null, "hasAttachment": null}
 
-Current date: ${now.toISOString()}
-
 Return ONLY the JSON object, no additional text.`;
 
       const response = await this.client.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: OPENAI_MODELS.QUERY_PARSING,
         messages: [
           {
             role: 'system',
@@ -120,8 +123,8 @@ Return ONLY the JSON object, no additional text.`;
             content: prompt
           }
         ],
-        temperature: 0.2,
-        max_tokens: 300,
+        temperature: AI_CONFIG.QUERY_PARSING_TEMPERATURE,
+        max_tokens: AI_CONFIG.QUERY_PARSING_MAX_TOKENS,
         response_format: { type: 'json_object' }
       });
 
@@ -144,7 +147,7 @@ Return ONLY the JSON object, no additional text.`;
   async generateEmbedding(text) {
     try {
       const response = await this.client.embeddings.create({
-        model: 'text-embedding-3-small',
+        model: OPENAI_MODELS.EMBEDDING,
         input: text,
         encoding_format: 'float'
       });

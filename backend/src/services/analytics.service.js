@@ -1,4 +1,4 @@
-import { prisma } from '../server.js';
+import { prisma } from '../db/prisma.js';
 import logger from '../utils/logger.js';
 
 export class AnalyticsService {
@@ -29,7 +29,17 @@ export class AnalyticsService {
         recentActivity: this.getRecentActivity(emails),
         averagePerDay: this.getAveragePerDay(emails),
         oldestEmail: emails.length > 0 ? emails[emails.length - 1].receivedAt : null,
-        newestEmail: emails.length > 0 ? emails[0].receivedAt : null
+        newestEmail: emails.length > 0 ? emails[0].receivedAt : null,
+
+        // New detailed metrics
+        busiestHours: this.getBusiestHours(emails),
+        busiestDays: this.getBusiestDaysOfWeek(emails),
+        senderDiversity: this.getSenderDiversity(emails),
+        monthlyTrend: this.getMonthlyTrend(emails),
+        embeddingCoverage: await this.getEmbeddingCoverage(),
+        timeDistribution: this.getTimeDistribution(emails),
+        emailLengthDistribution: this.getEmailLengthDistribution(emails),
+        classificationStats: await this.getClassificationStats()
       };
 
       logger.info(`Generated insights for user ${this.userId}`);
@@ -153,5 +163,178 @@ export class AnalyticsService {
     const daysDiff = Math.max(1, Math.ceil((newest - oldest) / (1000 * 60 * 60 * 24)));
 
     return Math.round(emails.length / daysDiff);
+  }
+
+  /**
+   * Get busiest hours of the day (0-23)
+   */
+  getBusiestHours(emails) {
+    const hourCounts = Array(24).fill(0);
+
+    emails.forEach(email => {
+      const hour = new Date(email.receivedAt).getHours();
+      hourCounts[hour]++;
+    });
+
+    return hourCounts.map((count, hour) => ({
+      hour: `${hour}:00`,
+      count
+    })).sort((a, b) => b.count - a.count).slice(0, 5); // Top 5 busiest hours
+  }
+
+  /**
+   * Get busiest days of the week
+   */
+  getBusiestDaysOfWeek(emails) {
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayCounts = Array(7).fill(0);
+
+    emails.forEach(email => {
+      const day = new Date(email.receivedAt).getDay();
+      dayCounts[day]++;
+    });
+
+    return dayCounts.map((count, index) => ({
+      day: dayNames[index],
+      count
+    })).sort((a, b) => b.count - a.count);
+  }
+
+  /**
+   * Get sender diversity stats
+   */
+  getSenderDiversity(emails) {
+    const uniqueSenders = new Set();
+
+    emails.forEach(email => {
+      const sender = email.senderEmail || email.sender;
+      if (sender) uniqueSenders.add(sender);
+    });
+
+    return {
+      uniqueSenders: uniqueSenders.size,
+      totalEmails: emails.length,
+      averageEmailsPerSender: emails.length > 0 ? Math.round(emails.length / uniqueSenders.size) : 0
+    };
+  }
+
+  /**
+   * Get monthly trend (this month vs last month)
+   */
+  getMonthlyTrend(emails) {
+    const now = new Date();
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+
+    const thisMonthEmails = emails.filter(e => new Date(e.receivedAt) >= thisMonthStart);
+    const lastMonthEmails = emails.filter(e => {
+      const date = new Date(e.receivedAt);
+      return date >= lastMonthStart && date <= lastMonthEnd;
+    });
+
+    const change = lastMonthEmails.length > 0
+      ? Math.round(((thisMonthEmails.length - lastMonthEmails.length) / lastMonthEmails.length) * 100)
+      : 0;
+
+    return {
+      thisMonth: thisMonthEmails.length,
+      lastMonth: lastMonthEmails.length,
+      percentChange: change,
+      trend: change > 0 ? 'up' : change < 0 ? 'down' : 'stable'
+    };
+  }
+
+  /**
+   * Get embedding coverage percentage
+   */
+  async getEmbeddingCoverage() {
+    const total = await prisma.email.count({
+      where: { userId: this.userId }
+    });
+
+    // Use raw SQL for unsupported vector type
+    const result = await prisma.$queryRaw`
+      SELECT COUNT(*) as count
+      FROM "Email"
+      WHERE "userId" = ${this.userId}
+      AND embedding IS NOT NULL
+    `;
+
+    const withEmbeddings = Number(result[0].count);
+
+    return {
+      total,
+      withEmbeddings,
+      percentage: total > 0 ? Math.round((withEmbeddings / total) * 100) : 0,
+      remaining: total - withEmbeddings
+    };
+  }
+
+  /**
+   * Get time of day distribution (morning, afternoon, evening, night)
+   */
+  getTimeDistribution(emails) {
+    const distribution = {
+      morning: 0,   // 6-12
+      afternoon: 0, // 12-17
+      evening: 0,   // 17-21
+      night: 0      // 21-6
+    };
+
+    emails.forEach(email => {
+      const hour = new Date(email.receivedAt).getHours();
+      if (hour >= 6 && hour < 12) distribution.morning++;
+      else if (hour >= 12 && hour < 17) distribution.afternoon++;
+      else if (hour >= 17 && hour < 21) distribution.evening++;
+      else distribution.night++;
+    });
+
+    return distribution;
+  }
+
+  /**
+   * Get email length distribution
+   */
+  getEmailLengthDistribution(emails) {
+    const distribution = {
+      short: 0,  // < 100 chars
+      medium: 0, // 100-500 chars
+      long: 0    // > 500 chars
+    };
+
+    emails.forEach(email => {
+      const length = (email.preview || '').length;
+      if (length < 100) distribution.short++;
+      else if (length < 500) distribution.medium++;
+      else distribution.long++;
+    });
+
+    return distribution;
+  }
+
+  /**
+   * Get classification statistics
+   */
+  async getClassificationStats() {
+    const total = await prisma.email.count({
+      where: { userId: this.userId }
+    });
+
+    const classified = await prisma.email.count({
+      where: {
+        userId: this.userId,
+        bucketId: { not: null }
+      }
+    });
+
+    const unclassified = total - classified;
+
+    return {
+      total,
+      classified,
+      unclassified,
+      classificationRate: total > 0 ? Math.round((classified / total) * 100) : 0
+    };
   }
 }

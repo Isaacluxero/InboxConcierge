@@ -1,4 +1,4 @@
-import { prisma } from '../server.js';
+import { prisma } from '../db/prisma.js';
 import { ClassificationService } from '../services/classification.service.js';
 import logger from '../utils/logger.js';
 
@@ -160,7 +160,13 @@ export const deleteBucket = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Cannot delete default bucket' });
     }
 
+    // Count emails in this bucket before deletion (for optimization tracking)
+    const emailCount = await prisma.email.count({
+      where: { bucketId: id, userId: req.user.id }
+    });
+
     // Set emails in this bucket to unclassified (bucketId = null)
+    // These are the ONLY emails that need reclassification
     await prisma.email.updateMany({
       where: { bucketId: id },
       data: { bucketId: null }
@@ -170,9 +176,13 @@ export const deleteBucket = async (req, res) => {
       where: { id }
     });
 
-    logger.info(`Deleted bucket ${id} for user ${req.user.id}`);
+    logger.info(`Deleted bucket "${bucket.name}" (${id}) for user ${req.user.id}. ${emailCount} emails set to unclassified and will be reclassified.`);
 
-    res.json({ success: true, message: 'Bucket deleted successfully' });
+    res.json({
+      success: true,
+      message: 'Bucket deleted successfully',
+      emailsToReclassify: emailCount
+    });
   } catch (error) {
     logger.error('Delete bucket error:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -183,11 +193,16 @@ export const reclassifyEmails = async (req, res) => {
   try {
     const classificationService = new ClassificationService(req.user.id);
 
-    // Get all emails or specific bucket
-    const { bucketId } = req.query;
+    // Get emails to reclassify
+    // By default, only reclassify unclassified emails (bucketId = null)
+    // This saves time and money by not reclassifying already classified emails
+    const { bucketId, all } = req.query;
+
     const where = {
       userId: req.user.id,
-      ...(bucketId && { bucketId })
+      ...(bucketId && { bucketId }),
+      // Only reclassify unclassified emails unless 'all' flag is set
+      ...(all !== 'true' && !bucketId && { bucketId: null })
     };
 
     const emails = await prisma.email.findMany({ where });
@@ -198,7 +213,7 @@ export const reclassifyEmails = async (req, res) => {
 
     const results = await classificationService.classifyEmails(emails);
 
-    logger.info(`Reclassified ${results.length} emails for user ${req.user.id}`);
+    logger.info(`Reclassified ${results.length} emails for user ${req.user.id} (${all === 'true' ? 'all emails' : 'unclassified only'})`);
 
     res.json({
       success: true,

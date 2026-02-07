@@ -4,7 +4,7 @@ import { bucketService, emailService } from '../../services/auth';
 import BucketTabs from './BucketTabs';
 import EmailCard from './EmailCard';
 
-const BucketView = () => {
+const BucketView = ({ onDeleteBucket, deletingBucket, creatingBucket, deletingBucketId, creatingBucketId }) => {
   const [activeBucketId, setActiveBucketId] = useState(null);
 
   const { data: bucketsData, isLoading: bucketsLoading } = useQuery({
@@ -17,12 +17,24 @@ const BucketView = () => {
     queryFn: () => emailService.getEmails({ bucketId: activeBucketId })
   });
 
+  // Auto-select the newly created bucket to show the loading overlay
+  React.useEffect(() => {
+    if (creatingBucketId) {
+      setActiveBucketId(creatingBucketId);
+    }
+  }, [creatingBucketId]);
+
   if (bucketsLoading) {
     return <div className="loading">Loading buckets...</div>;
   }
 
   const buckets = bucketsData?.data || [];
   const emails = emailsData?.data?.emails || [];
+
+  // Show loading overlay only when viewing the specific bucket being created or deleted
+  const showLoadingOverlay =
+    (creatingBucket && activeBucketId === creatingBucketId) ||
+    (deletingBucket && activeBucketId === deletingBucketId);
 
   return (
     <div>
@@ -31,9 +43,53 @@ const BucketView = () => {
         activeBucketId={activeBucketId}
         onSelectBucket={setActiveBucketId}
         onShowAll={() => setActiveBucketId(null)}
+        onDeleteBucket={onDeleteBucket}
+        deletingBucket={deletingBucket}
+        creatingBucket={creatingBucket}
+        deletingBucketId={deletingBucketId}
+        creatingBucketId={creatingBucketId}
       />
 
-      {emailsLoading ? (
+      {showLoadingOverlay ? (
+        // Loading overlay when reclassifying emails for this specific bucket
+        <div style={{
+          minHeight: '400px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          position: 'relative'
+        }}>
+          <div className="glass-dark" style={{
+            padding: '3rem 2rem',
+            textAlign: 'center',
+            border: `1px solid ${creatingBucket ? 'rgba(59, 130, 246, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+            backgroundColor: creatingBucket ? 'rgba(59, 130, 246, 0.1)' : 'rgba(239, 68, 68, 0.1)'
+          }}>
+            <div
+              className="spinner-lg"
+              style={{
+                borderColor: creatingBucket ? 'rgba(59, 130, 246, 0.3)' : 'rgba(239, 68, 68, 0.3)',
+                borderTopColor: creatingBucket ? '#3B82F6' : '#ef4444',
+                margin: '0 auto 1.5rem'
+              }}
+            />
+            <div style={{
+              fontWeight: '700',
+              fontSize: '1.25rem',
+              color: creatingBucket ? '#3B82F6' : '#ef4444',
+              marginBottom: '0.5rem'
+            }}>
+              {creatingBucket ? 'Creating bucket and reclassifying emails...' : 'Deleting bucket and reclassifying emails...'}
+            </div>
+            <div style={{ fontSize: '0.875rem', color: 'rgba(255, 255, 255, 0.7)' }}>
+              This may take a moment depending on how many emails you have
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.5)', marginTop: '1rem' }}>
+              {creatingBucket ? 'You can view other buckets while this completes' : 'Switch to another bucket to continue browsing'}
+            </div>
+          </div>
+        </div>
+      ) : emailsLoading ? (
         <div className="loading">Loading emails...</div>
       ) : emails.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: '#6b7280' }}>

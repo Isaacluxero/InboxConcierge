@@ -1,26 +1,33 @@
 # Inbox Concierge
 
-AI-powered email management system with natural language search capabilities using Claude AI.
+AI-powered email management system with natural language search capabilities using OpenAI.
 
 ## Features
 
 - **Google OAuth Authentication** - Secure login with Google
-- **Email Classification** - Automatic classification into customizable buckets
-- **Smart Search** - Natural language search powered by Claude AI
-  - "Find emails from John last week"
-  - "Important emails about budget"
-  - "Newsletters from this month"
+- **Email Classification** - Automatic classification into customizable buckets using OpenAI GPT-4o-mini
+- **Smart Hybrid Search** - Intelligent search that automatically chooses the best strategy:
+  - **Structured Search** - PostgreSQL filtering for sender/date/bucket queries
+  - **Semantic Search** - Vector similarity for topic-based queries
+  - **Hybrid Search** - Combines both for complex queries
+  - Examples: "Find emails from John last week", "budget discussions", "Sarah's project updates last month"
+- **Vector Embeddings** - Automatic semantic embedding generation (powered by OpenAI)
+- **Advanced Analytics** - Comprehensive email insights including:
+  - Email volume trends, busiest hours/days, sender diversity
+  - Time-of-day distribution, classification stats, embedding coverage
 - **Custom Buckets** - Create and manage your own email categories
 - **Real-time Sync** - Fetch and classify emails from Gmail
+- **Security** - Industry-standard security with helmet.js, rate limiting, input validation
 
 ## Tech Stack
 
-- **Frontend:** React (Vite)
+- **Frontend:** React (Vite), TanStack Query
 - **Backend:** Node.js/Express
-- **Database:** PostgreSQL (Railway-managed)
+- **Database:** PostgreSQL with pgvector extension (Railway-managed)
 - **ORM:** Prisma
-- **AI/LLM:** Claude API (Anthropic)
+- **AI/LLM:** OpenAI GPT-4o-mini for classification, embeddings, and query parsing
 - **Auth:** Google OAuth 2.0
+- **Security:** Helmet.js, express-rate-limit, express-validator
 - **Deployment:** Railway
 
 ## Project Structure
@@ -80,8 +87,10 @@ cp .env.example .env
 - `GOOGLE_CLIENT_ID` - From Google Cloud Console
 - `GOOGLE_CLIENT_SECRET` - From Google Cloud Console
 - `GOOGLE_REDIRECT_URI` - Your callback URL
-- `ANTHROPIC_API_KEY` - From Anthropic Console
+- `OPENAI_API_KEY` - From OpenAI (for classification, embeddings, and query parsing)
 - `SESSION_SECRET` - Random secure string (32+ characters)
+- `FRONTEND_URL` - Frontend URL for CORS
+- `ALLOWED_ORIGINS` - Comma-separated list of allowed origins
 
 5. Generate Prisma client and run migrations:
 ```bash
@@ -250,15 +259,38 @@ npx prettier --write .
 1. Fetch emails from Gmail API
 2. Parse and normalize email data
 3. Batch emails (20-50 per batch)
-4. Send to Claude API with bucket definitions
+4. Send to OpenAI GPT-4o-mini API with bucket definitions (cost-effective model for high-volume classification)
 5. Store classification results in PostgreSQL
+6. **Automatically generate vector embeddings** (50 per sync) for semantic search
 
-### Smart Search
+### Smart Hybrid Search
 
-1. User enters natural language query
-2. Claude API parses query into structured filters
-3. Build PostgreSQL query from filters
-4. Return ranked results with parsed filters displayed
+The system intelligently chooses the optimal search strategy:
+
+**1. Query Parsing** - OpenAI GPT-4o-mini extracts:
+- Sender name/email
+- Topic/keywords
+- Timeframe (with pattern matching fallback)
+- Bucket category
+
+**2. Strategy Selection:**
+- **Structured Search** - When query has only sender/date/bucket (no topic)
+  - Uses PostgreSQL WHERE clauses for exact matching
+  - Fast and precise
+- **Vector Search** - When query has only a topic (no structured filters)
+  - Generates query embedding with OpenAI text-embedding-3-small
+  - Uses pgvector for semantic similarity search
+  - Returns up to 50 results with similarity > 0.5
+  - Falls back to keyword search if no embeddings exist
+- **Hybrid Search** - When query has both topic AND structured filters
+  - Step 1: PostgreSQL filters candidates (sender, date, bucket)
+  - Step 2: Re-ranks candidates by vector similarity to topic
+  - Best of both worlds: precision + semantic understanding
+
+**3. Automatic Embeddings:**
+- Generated during email sync (50 emails per sync)
+- Zero user configuration required
+- Progressive enhancement - search improves as embeddings are generated
 
 ## Troubleshooting
 
@@ -273,14 +305,6 @@ npx prettier --write .
 - Ensure `GOOGLE_REDIRECT_URI` matches exactly in Google Console
 
 ### Classification Errors
-- Verify `ANTHROPIC_API_KEY` is valid
+- Verify `OPENAI_API_KEY` is valid
 - Check batch size is < 50 emails
-- Review Claude API rate limits
-
-## License
-
-MIT
-
-## Contributors
-
-Built with Claude Code
+- Review OpenAI API rate limits (gpt-4o-mini has high rate limits)

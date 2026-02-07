@@ -14,6 +14,7 @@ process.env.ALLOWED_ORIGINS = 'http://localhost:5173';
 export const mockPrismaClient = {
   user: {
     findUnique: jest.fn(),
+    findFirst: jest.fn(),
     findMany: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
@@ -21,6 +22,7 @@ export const mockPrismaClient = {
   },
   email: {
     findUnique: jest.fn(),
+    findFirst: jest.fn(),
     findMany: jest.fn(),
     create: jest.fn(),
     createMany: jest.fn(),
@@ -30,6 +32,7 @@ export const mockPrismaClient = {
   },
   bucket: {
     findUnique: jest.fn(),
+    findFirst: jest.fn(),
     findMany: jest.fn(),
     create: jest.fn(),
     createMany: jest.fn(),
