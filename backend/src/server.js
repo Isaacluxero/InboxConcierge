@@ -5,6 +5,8 @@ import passport from 'passport';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import logger from './utils/logger.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { prisma, disconnectPrisma } from './db/prisma.js';
@@ -16,6 +18,9 @@ import searchRoutes from './routes/search.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -85,14 +90,25 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Routes
+// API Routes
 app.use('/auth', authRoutes);
 app.use('/api/emails', emailRoutes);
 app.use('/api/buckets', bucketRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/analytics', analyticsRoutes);
 
-// Error handling
+// Serve frontend static files in production
+if (process.env.NODE_ENV === 'production') {
+  const frontendDistPath = path.join(__dirname, '../../frontend/dist');
+  app.use(express.static(frontendDistPath));
+
+  // Catch-all route for React Router (must be after API routes)
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(frontendDistPath, 'index.html'));
+  });
+}
+
+// Error handling (only applies if no other route matched)
 app.use(notFoundHandler);
 app.use(errorHandler);
 

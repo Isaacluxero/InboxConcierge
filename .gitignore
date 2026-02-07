@@ -81,3 +81,7 @@ CLAUDE.md
 # Test and analysis markdown files (keep only README.md)
 *.md
 !README.md
+
+# Deployment helper files with secrets
+RAILWAY_ENV_VARS.txt
+**/fix-migration.sh
