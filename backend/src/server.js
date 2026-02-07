@@ -50,10 +50,12 @@ const authLimiter = rateLimit({
 app.use('/api/', generalLimiter);
 app.use('/auth/', authLimiter);
 
-// CORS configuration
+// CORS configuration - only for API and auth routes
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173'];
-app.use(cors({
+const corsOptions = {
   origin: (origin, callback) => {
+    // Allow same-origin requests (no Origin header)
+    // Allow configured origins for API requests
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -61,7 +63,11 @@ app.use(cors({
     }
   },
   credentials: true
-}));
+};
+
+// Apply CORS only to API and auth routes (not static files)
+app.use('/api', cors(corsOptions));
+app.use('/auth', cors(corsOptions));
 
 // Middleware
 app.use(express.json());
