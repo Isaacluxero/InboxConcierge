@@ -25,6 +25,11 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust Railway proxy (for rate limiting and IP detection)
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 // Security: Helmet - sets various HTTP headers for security
 app.use(helmet({
   contentSecurityPolicy: false, // Disable CSP for now (can configure later)
