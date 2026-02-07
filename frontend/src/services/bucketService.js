@@ -57,13 +57,17 @@ export const bucketService = {
 
   /**
    * Reclassify all emails (or emails for specific bucket)
-   * @param {string} [bucketId] - Optional bucket ID to reclassify specific bucket
+   * @param {Object} options - Reclassification options
+   * @param {string} [options.bucketId] - Optional bucket ID to reclassify specific bucket
+   * @param {boolean} [options.all] - If true, reclassify ALL emails, not just unclassified ones
    * @returns {Promise<Object>} Reclassification results
    */
-  reclassifyEmails: async (bucketId) => {
-    const response = await api.post('/api/buckets/reclassify', {}, {
-      params: bucketId ? { bucketId } : {}
-    });
+  reclassifyEmails: async (options = {}) => {
+    const params = {};
+    if (options.bucketId) params.bucketId = options.bucketId;
+    if (options.all) params.all = 'true';
+
+    const response = await api.post('/api/buckets/reclassify', {}, { params });
     return response.data;
   }
 };

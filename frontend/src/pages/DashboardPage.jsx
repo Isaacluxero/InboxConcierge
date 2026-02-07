@@ -35,9 +35,10 @@ const DashboardPage = ({ user, onLogout }) => {
   const createBucketMutation = useMutation({
     mutationFn: async (data) => {
       const result = await bucketService.createBucket(data);
+      // Set the ID so loading overlay shows during reclassification
       setCreatingBucketId(result.data.id);
-      await queryClient.invalidateQueries({ queryKey: ['buckets'] });
-      await bucketService.reclassifyEmails();
+      // Reclassify ALL emails to check if they belong in the new bucket
+      await bucketService.reclassifyEmails({ all: true });
       return result;
     },
     onSuccess: () => {
@@ -54,7 +55,8 @@ const DashboardPage = ({ user, onLogout }) => {
     mutationFn: async (bucketId) => {
       setDeletingBucketId(bucketId);
       const result = await bucketService.deleteBucket(bucketId);
-      await bucketService.reclassifyEmails();
+      // Reclassify ALL emails since bucket definitions changed
+      await bucketService.reclassifyEmails({ all: true });
       return result;
     },
     onSuccess: () => {
