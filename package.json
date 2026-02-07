@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "description": "AI-powered email management with smart search",
   "scripts": {
-    "start": "./start.sh",
+    "start": "cd backend && npm start",
+    "build": "cd backend && npm install && npm run build",
+    "dev:local": "./start.sh",
     "stop": "./stop.sh",
-    "dev": "npm run start",
     "install:all": "cd backend && npm install && cd ../frontend && npm install",
     "setup": "npm run install:all && cd backend && npx prisma generate && npx prisma migrate dev --name init",
     "backend": "cd backend && npm run dev",
@@ -21,5 +22,9 @@
     "search"
   ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
 }
