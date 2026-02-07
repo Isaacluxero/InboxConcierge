@@ -1,0 +1,25 @@
+{
+  "name": "inbox-concierge",
+  "version": "1.0.0",
+  "description": "AI-powered email management with smart search",
+  "scripts": {
+    "start": "./start.sh",
+    "stop": "./stop.sh",
+    "dev": "npm run start",
+    "install:all": "cd backend && npm install && cd ../frontend && npm install",
+    "setup": "npm run install:all && cd backend && npx prisma generate && npx prisma migrate dev --name init",
+    "backend": "cd backend && npm run dev",
+    "frontend": "cd frontend && npm run dev",
+    "logs:backend": "tail -f .logs/backend.log",
+    "logs:frontend": "tail -f .logs/frontend.log"
+  },
+  "keywords": [
+    "email",
+    "ai",
+    "claude",
+    "gmail",
+    "search"
+  ],
+  "author": "",
+  "license": "MIT"
+}

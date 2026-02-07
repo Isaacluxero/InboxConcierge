@@ -1,0 +1,76 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+package-lock.json
+yarn.lock
+
+# Testing
+coverage/
+.nyc_output/
+
+# Production
+build/
+dist/
+
+# Environment variables - CRITICAL: Never commit these!
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+*.log
+.logs/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*~
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# Prisma
+prisma/migrations/
+.prisma/
+
+# Railway
+.railway/
+
+# Temp files
+tmp/
+temp/
+*.tmp
+
+# Process IDs
+*.pid
+
+# Mac
+__MACOSX/
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Linux
+.directory
