@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 import logger from './utils/logger.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { prisma, disconnectPrisma } from './db/prisma.js';
+import './controllers/auth.controller.js'; // Initialize passport configuration
 import authRoutes from './routes/auth.routes.js';
 import emailRoutes from './routes/email.routes.js';
 import bucketRoutes from './routes/bucket.routes.js';
