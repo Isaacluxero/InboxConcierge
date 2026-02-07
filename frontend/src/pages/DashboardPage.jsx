@@ -205,12 +205,6 @@ const DashboardPage = ({ user, onLogout }) => {
           </div>
         )}
 
-        {deleteBucketMutation.isSuccess && (
-          <div className="success mt-md">
-            Successfully deleted bucket and reclassified all emails!
-          </div>
-        )}
-
         {deleteBucketMutation.isError && (
           <div className="error mt-md">
             Unable to delete bucket. Please try again.
