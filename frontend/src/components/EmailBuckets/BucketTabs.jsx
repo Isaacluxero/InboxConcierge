@@ -145,6 +145,47 @@ const BucketTabs = ({ buckets, activeBucketId, onSelectBucket, onShowAll, onDele
         </div>
       </div>
 
+      {/* Deletion in progress message */}
+      {deletingBucketId && (
+        <div style={{
+          marginBottom: '1rem',
+          padding: '1rem',
+          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+          border: '1px solid rgba(239, 68, 68, 0.3)',
+          borderRadius: '0.5rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem'
+        }}>
+          <div
+            className="spinner"
+            style={{
+              width: '16px',
+              height: '16px',
+              borderWidth: '2px',
+              borderColor: 'rgba(239, 68, 68, 0.3)',
+              borderTopColor: '#ef4444'
+            }}
+          />
+          <div style={{ flex: 1 }}>
+            <div style={{
+              fontSize: '0.875rem',
+              fontWeight: '600',
+              color: '#ef4444',
+              marginBottom: '0.25rem'
+            }}>
+              Deleting bucket and reclassifying emails...
+            </div>
+            <div style={{
+              fontSize: '0.75rem',
+              color: 'rgba(255, 255, 255, 0.6)'
+            }}>
+              This may take a moment. All emails will be redistributed to remaining buckets.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Confirmation Modal */}
       {confirmDelete && (
         <div style={{

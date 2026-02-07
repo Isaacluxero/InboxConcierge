@@ -35,19 +35,33 @@ const DashboardPage = ({ user, onLogout }) => {
   const createBucketMutation = useMutation({
     mutationFn: async (data) => {
       const result = await bucketService.createBucket(data);
-      // Set the ID so loading overlay shows during reclassification
+
+      // Optimistically add new bucket to cache so it shows immediately
+      queryClient.setQueryData(['buckets'], (old) => {
+        if (!old?.data) return old;
+        return {
+          ...old,
+          data: [...old.data, { ...result.data, _count: { emails: 0 } }]
+        };
+      });
+
+      // Set ID so loading overlay shows when clicking the new bucket
       setCreatingBucketId(result.data.id);
+
       // Reclassify ALL emails to check if they belong in the new bucket
       await bucketService.reclassifyEmails({ all: true });
       return result;
     },
     onSuccess: () => {
+      // Refetch to get accurate email counts
       queryClient.invalidateQueries({ queryKey: ['buckets'] });
       queryClient.invalidateQueries({ queryKey: ['emails'] });
       setCreatingBucketId(null);
     },
     onError: () => {
       setCreatingBucketId(null);
+      // Rollback optimistic update on error
+      queryClient.invalidateQueries({ queryKey: ['buckets'] });
     }
   });
 
